@@ -3,7 +3,7 @@
 
 一款自用的Blender工具箱，目前整合了一些方便制作基于3dmigoto的模组的插件
 
-![预览图片](https://github.com/ZelbertYQ/ZMTB/blob/main/Images/Plug-Preview.png)
+![预览图片](https://raw.githubusercontent.com/ZelbertYQ/ZMTB/main/Images/Plug-Preview.png   )
 # 引用声明
 本项目作者并无代码基础
 
