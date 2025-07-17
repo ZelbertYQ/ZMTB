@@ -4,13 +4,14 @@ bl_info = {
     "version": (1, 6),
     "blender": (2, 80, 3),
     "location": "Search > Apply modifiers (Keep Shapekeys)",
-    "description": "Applies modifiers and keeps shapekeys",
+    "description": "Applies modifiers and keeps shapekeys, with additional shape key utilities",
     "category": "Utility",
     "wiki_url": "https://github.com/smokejohn/SKkeeper",
 }
 
 import time
 import bpy
+import re
 from bpy.types import Operator, PropertyGroup
 from bpy.props import BoolProperty, CollectionProperty
 
@@ -76,6 +77,16 @@ def add_objs_shapekeys(destination, sources):
         src.select_set(True)
     bpy.context.view_layer.objects.active = destination
     bpy.ops.object.join_shapes()
+
+def has_vertex_displacement(obj, shape_key, base_verts, epsilon=1e-6):
+    """检查形态键是否包含顶点位移"""
+    shape_verts = shape_key.data
+    for i in range(len(base_verts)):
+        if (abs(shape_verts[i].co.x - base_verts[i].co.x) > epsilon or
+            abs(shape_verts[i].co.y - base_verts[i].co.y) > epsilon or
+            abs(shape_verts[i].co.z - base_verts[i].co.z) > epsilon):
+            return True
+    return False
 
 class SK_TYPE_Resource(PropertyGroup):
     selected: BoolProperty(name="Selected", default=False)
@@ -221,19 +232,148 @@ class SK_OT_apply_mods_choice_SK(Operator):
             row = col.row()
             row.prop(entry, 'selected', text=entry.name)
 
+class SK_OT_sort_deform_shape_keys(Operator):
+    bl_idname = "sk_tools.sort_deform_sk"
+    bl_label = "排序Deform形态键"
+    bl_options = {'REGISTER', 'UNDO'}
+    def validate_input(self, obj):
+        if not obj:
+            self.report({'ERROR'}, "没有选中的对象，请选择一个对象")
+            return {'CANCELLED'}
+        if obj.type != 'MESH':
+            self.report({'ERROR'}, "对象类型错误，请选择一个网格对象")
+            return {'CANCELLED'}
+        if not obj.data.shape_keys:
+            self.report({'ERROR'}, "选中的对象没有形态键")
+            return {'CANCELLED'}
+        if len(obj.data.shape_keys.key_blocks) == 1:
+            self.report({'ERROR'}, "选中的对象仅有一个基础形态键")
+            return {'CANCELLED'}
+    def execute(self, context):
+        obj = context.active_object
+        if self.validate_input(obj) == {'CANCELLED'}:
+            return {'CANCELLED'}
+        key_blocks = obj.data.shape_keys.key_blocks
+        deform_keys = []
+        for kb in key_blocks:
+            if kb.name.startswith("Deform"):
+                match = re.search(r'Deform\s*(\d+)', kb.name)
+                if match:
+                    number = int(match.group(1))
+                    deform_keys.append((number, kb.name))
+        if not deform_keys:
+            self.report({'WARNING'}, "未找到前缀为Deform的形态键")
+            return {'CANCELLED'}
+        deform_keys.sort(key=lambda x: x[0])
+        for num, key_name in reversed(deform_keys):
+            idx = key_blocks.find(key_name)
+            if idx > 0:
+                for _ in range(idx, 1, -1):
+                    obj.active_shape_key_index = idx
+                    bpy.ops.object.shape_key_move(type='UP')
+                    idx -= 1
+        self.report({'INFO'}, "已按数字顺序对Deform形态键排序")
+        return {'FINISHED'}
+
+class SK_OT_remove_empty_shape_keys(Operator):
+    bl_idname = "sk_tools.remove_empty_sk"
+    bl_label = "删除无位移形态键"
+    bl_options = {'REGISTER', 'UNDO'}
+    def validate_input(self, obj):
+        if not obj:
+            self.report({'ERROR'}, "没有选中的对象，请选择一个对象")
+            return {'CANCELLED'}
+        if obj.type != 'MESH':
+            self.report({'ERROR'}, "对象类型错误，请选择一个网格对象")
+            return {'CANCELLED'}
+        if not obj.data.shape_keys:
+            self.report({'ERROR'}, "选中的对象没有形态键")
+            return {'CANCELLED'}
+    def execute(self, context):
+        obj = context.active_object
+        if self.validate_input(obj) == {'CANCELLED'}:
+            return {'CANCELLED'}
+        shape_keys = obj.data.shape_keys.key_blocks
+        base_verts = obj.data.vertices
+        if "Basis" in shape_keys:
+            base_verts = shape_keys["Basis"].data
+        to_remove_names = []
+        for shape_key in shape_keys:
+            if shape_key.name == "Basis":
+                continue
+            if not has_vertex_displacement(obj, shape_key, base_verts):
+                to_remove_names.append(shape_key.name)
+        context.view_layer.objects.active = obj
+        for name in to_remove_names:
+            for i, shape_key in enumerate(shape_keys):
+                if shape_key.name == name:
+                    obj.active_shape_key_index = i
+                    log(f"删除无位移形态键: {name}")
+                    bpy.ops.object.shape_key_remove()
+                    break
+        if to_remove_names:
+            self.report({'INFO'}, f"已删除 {len(to_remove_names)} 个无位移形态键")
+        else:
+            self.report({'INFO'}, "未找到无位移形态键")
+        return {'FINISHED'}
+
+class SK_OT_remove_deform_shape_keys(Operator):
+    bl_idname = "sk_tools.remove_deform_sk"
+    bl_label = "删除Deform形态键"
+    bl_options = {'REGISTER', 'UNDO'}
+    def validate_input(self, obj):
+        if not obj:
+            self.report({'ERROR'}, "没有选中的对象，请选择一个对象")
+            return {'CANCELLED'}
+        if obj.type != 'MESH':
+            self.report({'ERROR'}, "对象类型错误，请选择一个网格对象")
+            return {'CANCELLED'}
+        if not obj.data.shape_keys:
+            self.report({'ERROR'}, "选中的对象没有形态键")
+            return {'CANCELLED'}
+    def execute(self, context):
+        obj = context.active_object
+        if self.validate_input(obj) == {'CANCELLED'}:
+            return {'CANCELLED'}
+        shape_keys = obj.data.shape_keys.key_blocks
+        to_remove_names = [sk.name for sk in shape_keys if sk.name.startswith("Deform")]
+        context.view_layer.objects.active = obj
+        for name in to_remove_names:
+            for i, shape_key in enumerate(shape_keys):
+                if shape_key.name == name:
+                    obj.active_shape_key_index = i
+                    log(f"删除Deform形态键: {name}")
+                    bpy.ops.object.shape_key_remove()
+                    break
+        if to_remove_names:
+            self.report({'INFO'}, f"已删除 {len(to_remove_names)} 个Deform形态键")
+        else:
+            self.report({'INFO'}, "未找到Deform形态键")
+        return {'FINISHED'}
+
 def draw_panel(layout, context):
-    row = layout.row(align=True)  # Changed from column to row for horizontal layout
+    row = layout.row(align=True)
     row.operator("sk_tools.apply_mods_sk")
     row.operator("sk_tools.apply_subd_sk")
     row.operator("sk_tools.apply_mods_choice_sk")
+    row = layout.row(align=True)
+    row.operator("sk_tools.sort_deform_sk")
+    row.operator("sk_tools.remove_empty_sk")
+    row.operator("sk_tools.remove_deform_sk")
 
 def register():
     bpy.utils.register_class(SK_TYPE_Resource)
     bpy.utils.register_class(SK_OT_apply_mods_SK)
     bpy.utils.register_class(SK_OT_apply_subd_SK)
     bpy.utils.register_class(SK_OT_apply_mods_choice_SK)
+    bpy.utils.register_class(SK_OT_sort_deform_shape_keys)
+    bpy.utils.register_class(SK_OT_remove_empty_shape_keys)
+    bpy.utils.register_class(SK_OT_remove_deform_shape_keys)
 
 def unregister():
+    bpy.utils.unregister_class(SK_OT_remove_deform_shape_keys)
+    bpy.utils.unregister_class(SK_OT_remove_empty_shape_keys)
+    bpy.utils.unregister_class(SK_OT_sort_deform_shape_keys)
     bpy.utils.unregister_class(SK_OT_apply_mods_choice_SK)
     bpy.utils.unregister_class(SK_OT_apply_subd_SK)
     bpy.utils.unregister_class(SK_OT_apply_mods_SK)
