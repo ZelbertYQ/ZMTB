@@ -2,7 +2,7 @@ bl_info = {
     "name": "ZelbertYQ's MOD Tool Box",
     "author": "Various (Integrated by Grok)",
     "version": (1, 0, 0),
-    "blender": (3, 6, 11),  # Set to the highest required version among sub-add-ons
+    "blender": (3, 6, 11),
     "location": "View3D > Sidebar > SK Tools",
     "description": "A collection of tools for vertex colors, weight painting, vertex groups, shape keys, and bone matching.",
     "category": "中文版",
@@ -16,7 +16,8 @@ from .vertex_group_combiner import vertex_group_combiner
 from .sk_keeper import sk_keeper
 from .vertex_group_snapshot import vertex_group_snapshot
 from .uv_snapshot import uv_snapshot
-from .bone_match import bone_match  # 新增导入
+from .bone_match import bone_match
+from .automatic_map import automatic_map  # 导入 automatic_map
 
 # Main panel class
 class SK_TOOLS_PT_main_panel(Panel):
@@ -59,7 +60,7 @@ class SK_TOOLS_PT_main_panel(Panel):
         box.label(text="UV快照", icon='UV_DATA')
         uv_snapshot.draw_panel(box, context)
 
-        # Bone Match Section (新增部分)
+        # Bone Match Section
         box = layout.box()
         box.label(text="骨骼匹配", icon='BONE_DATA')
         bone_match.draw_panel(box, context)
@@ -72,7 +73,8 @@ def register():
     vertex_group_combiner.register()
     vertex_group_snapshot.register()
     uv_snapshot.register()
-    bone_match.register()  # 注册新模块
+    bone_match.register()
+    automatic_map.register()
 
 def unregister():
     bpy.utils.unregister_class(SK_TOOLS_PT_main_panel)
@@ -82,7 +84,8 @@ def unregister():
     vertex_group_combiner.unregister()
     vertex_group_snapshot.unregister()
     uv_snapshot.unregister()
-    bone_match.unregister()  # 注销新模块
+    bone_match.unregister()
+    automatic_map.unregister()
 
 if __name__ == "__main__":
     register()
