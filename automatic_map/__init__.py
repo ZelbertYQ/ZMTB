@@ -3,8 +3,8 @@ bl_info = {
     "author": "Grok (Integrated for ZMTB)",
     "version": (1, 0, 0),
     "blender": (4, 4, 3),
-    "location": "View3D > Header > ZMTB Test Button",
-    "description": "A tool for adding a test button in the 3D View header.",
+    "location": "View3D > Sidebar > ZMTB > Automatic Map",
+    "description": "A tool to apply diffuse textures to game models based on component numbers and hash values.",
     "category": "中文版",
 }
 
